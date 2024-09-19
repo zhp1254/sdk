@@ -152,6 +152,13 @@
 //! example of how to use these modules to build a web app. Its source code can be found in the
 //!
 
+use std::ffi::CStr;
+use std::ffi::c_char;
+use std::ffi::CString;
+
+use serde_json;
+use serde::{Deserialize, Serialize};
+
 pub mod account;
 pub use account::*;
 
@@ -196,6 +203,16 @@ extern "C" {
     pub fn log(s: &str);
 }
 
+
+#[derive(Serialize, Deserialize)]
+struct TransferInfo {
+    private_key: String,
+    receiver: String,
+    amount: f64,
+    fee: f64,
+    state_root: String,
+}
+
 /// A trait providing convenient methods for accessing the amount of Aleo present in a record
 pub trait Credits {
     /// Get the amount of credits in the record if the record possesses Aleo credits
@@ -235,3 +252,102 @@ pub async fn init_thread_pool(url: web_sys::Url, num_threads: usize) -> Result<(
 
     Ok(())
 }
+
+
+#[no_mangle]
+pub extern "C" fn new_private() -> *const c_char {
+       let key = PrivateKey::new();
+       let key_str = key.to_string();
+       let c_key = CString::new(key_str).unwrap();
+       c_key.into_raw()
+}
+
+#[no_mangle]
+pub extern "C" fn free_c_char(ptr: *mut c_char) {
+    unsafe { drop(CString::from_raw(ptr)) };
+}
+
+
+
+
+
+#[no_mangle]
+pub extern "C" fn private_to_address(key: *const c_char) -> *const c_char {
+       let key_tmp = unsafe { CStr::from_ptr(key) };
+       let key_str = match key_tmp.to_str() {
+              Ok(v) => v,
+              Err(e) => {
+                  panic!("key to_str err: {:?}", e);
+              }
+          };
+
+       let key_n = match PrivateKey::from_string(key_str) {
+             Ok(v) => v,
+             Err(e) => {
+                 panic!("parse key err: {:?}", e);
+             }
+         };
+       let addr = key_n.to_address().to_string();
+       let ret = CString::new(addr).unwrap();
+       ret.into_raw()
+}
+
+
+
+#[no_mangle]
+pub extern "C" fn transfer_tx(json_c_char: *const c_char) -> *const c_char {
+      let json_cstr = unsafe {
+         assert!(!json_c_char.is_null());
+         CStr::from_ptr(json_c_char)
+     };
+
+     let json_str = match json_cstr.to_str() {
+         Ok(v) => v,
+         Err(e) => {
+             panic!("json ptr to json string err: {:?}", e);
+         }
+     };
+
+      let data: TransferInfo = match serde_json::from_str(json_str) {
+         Ok(v) => v,
+         Err(e) => {
+            panic!("json to transferInfo struct err: {:?}", e);
+         }
+     };
+
+     let offline_query = OfflineQuery::new(&data.state_root);
+     let private_key = match PrivateKey::from_string(&data.private_key) {
+                 Ok(v) => v,
+                 Err(e) => {
+                     panic!("parse key err: {:?}", e);
+                 }
+             };
+
+       let ret= ProgramManager::transfer(
+             &private_key,
+             data.amount,
+             &data.receiver,
+             "public",
+             None,
+             data.fee,
+             None,
+             None,
+             None,
+             None,
+             None,
+             None,
+             Some(offline_query.expect("offline query init error")),
+         );
+
+         let transfer = match ret {
+                  Ok(v) => v,
+                  Err(e) => {
+                     panic!("ProgramManager create transfer err: {:?}", e);
+                  }
+              };
+
+         let resp_json = transfer.to_string();
+         let resp_data = CString::new(resp_json).unwrap();
+         resp_data.into_raw()
+}
+

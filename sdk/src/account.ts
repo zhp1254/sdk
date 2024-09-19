@@ -61,7 +61,7 @@ export class Account {
    * Attempts to create an account from a private key ciphertext
    * @param {PrivateKeyCiphertext | string} ciphertext
    * @param {string} password
-   * @returns {PrivateKey}
+   * @returns {PrivateKey | Error}
    *
    * @example
    * const ciphertext = PrivateKey.newEncrypted("password");

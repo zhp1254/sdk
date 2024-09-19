@@ -18,7 +18,7 @@ license = "GPL-3.0"
 edition = "2021"
 
 [lib]
-crate-type = [ "cdylib", "rlib" ]
+crate-type = [ "cdylib"]
 doctest = false
 
 [dependencies.snarkvm-circuit-network]
