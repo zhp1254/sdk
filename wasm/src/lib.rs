@@ -194,6 +194,14 @@ use wasm_bindgen::prelude::*;
 use std::str::FromStr;
 
 use types::native::RecordPlaintextNative;
+use rand::{rngs::StdRng};
+use rand::SeedableRng;
+
+use crate::types::native::{
+    CurrentAleo,
+    ProcessNative,
+    TransactionNative
+};
 
 // Facilities for cross-platform logging in both web browsers and nodeJS
 #[wasm_bindgen]
@@ -203,13 +211,12 @@ extern "C" {
     pub fn log(s: &str);
 }
 
-
 #[derive(Serialize, Deserialize)]
 struct TransferInfo {
     private_key: String,
     receiver: String,
-    amount: f64,
-    fee: f64,
+    amount: u64,
+    fee: u64,
     state_root: String,
 }
 
@@ -253,7 +260,6 @@ pub async fn init_thread_pool(url: web_sys::Url, num_threads: usize) -> Result<(
     Ok(())
 }
 
-
 #[no_mangle]
 pub extern "C" fn new_private() -> *const c_char {
        let key = PrivateKey::new();
@@ -266,10 +272,6 @@ pub extern "C" fn new_private() -> *const c_char {
 pub extern "C" fn free_c_char(ptr: *mut c_char) {
     unsafe { drop(CString::from_raw(ptr)) };
 }
-
-
-
-
 
 #[no_mangle]
 pub extern "C" fn private_to_address(key: *const c_char) -> *const c_char {
@@ -290,6 +292,97 @@ pub extern "C" fn private_to_address(key: *const c_char) -> *const c_char {
        let addr = key_n.to_address().to_string();
        let ret = CString::new(addr).unwrap();
        ret.into_raw()
+}
+
+#[no_mangle]
+pub extern "C" fn transfer(key: *const c_char) -> *const c_char {
+    let key_json = unsafe {
+            assert!(!key.is_null());
+            CStr::from_ptr(key)
+        };
+
+    let json_str = match key_json.to_str() {
+        Ok(v) => v,
+        Err(e) => {
+            panic!("parse json err: {:?}", e);
+        }
+    };
+
+    let data: TransferInfo = match serde_json::from_str(json_str) {
+        Ok(v) => v,
+        Err(e) => {
+            panic!("json to struct err: {:?}", e)
+        }
+    };
+
+    let transaction = match create_transfer(data) {
+        Ok(v) => v,
+        Err(e) => {
+            panic!("create transfer err: {:?}", e)
+        }
+    };
+
+    let tx = transaction.to_string();
+     let ret = CString::new(tx).unwrap();
+     ret.into_raw()
+}
+
+fn create_transfer(data: TransferInfo) -> Result<Transaction, String>{
+     let private_key = match PrivateKey::from_string(&data.private_key) {
+         Ok(v) => v,
+         Err(e) => {
+             panic!("parse private key err: {:?}", e);
+         }
+     };
+
+    let locator = ("credits.aleo", "transfer_public");
+    let amount = data.amount;
+    let inputs = [data.receiver, format!("{amount}_u64")];
+    let rng = &mut StdRng::from_entropy();
+     // Initialize the process.
+    let process = ProcessNative::load().unwrap();
+    // Authorize the fee.
+    let authorization = process
+        .authorize::<CurrentAleo, _>(
+            &private_key,
+            // program.id
+            locator.0,
+            // func name
+            locator.1,
+            // input
+            inputs.iter(),
+            rng,
+        )
+        .unwrap();
+    // Construct the fee trace.
+    let (_, mut trace) = process.execute::<CurrentAleo, _>(authorization, rng).unwrap();
+    // Prepare the assignments.
+    let offline_query = OfflineQuery::new(&data.state_root).unwrap();
+    let _ = trace.prepare(offline_query.clone());
+
+     let execution =
+                trace.prove_execution::<CurrentAleo, _>(locator.0, rng).map_err(|e| e.to_string())?;
+     let execution_id = execution.to_execution_id().map_err(|e| e.to_string())?;
+
+     //attach fee
+     let fee_authorization = process.authorize_fee_public::<CurrentAleo, _>(
+         &private_key,
+         // base fee
+         data.fee,
+         //priority fee
+         0u64,
+         execution_id,
+         rng,
+     ).map_err(|e| e.to_string())?;
+
+     let (_, mut fee_trace) = process
+                 .execute::<CurrentAleo, _>(fee_authorization, rng)
+                 .map_err(|err| err.to_string())?;
+     let _ = fee_trace.prepare(offline_query.clone());
+     let fee = fee_trace.prove_fee::<CurrentAleo, _>(&mut StdRng::from_entropy()).map_err(|e|e.to_string())?;
+
+     let transaction = TransactionNative::from_execution(execution, Some(fee)).map_err(|err| err.to_string())?;
+     Ok(Transaction::from(transaction))
 }
 
 
