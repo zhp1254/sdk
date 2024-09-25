@@ -391,11 +391,14 @@ fn create_transfer(data: TransferInfo) -> Result<Transaction, String>{
         )
         .unwrap();
     // Construct the fee trace.
+    println!("begin execute transfer");
     let (_, mut trace) = process.execute::<CurrentAleo, _>(authorization, rng).unwrap();
     // Prepare the assignments.
+    println!("begin prepare offline_query");
     let offline_query = OfflineQuery::new(&data.state_root).unwrap();
     let _ = trace.prepare(offline_query.clone());
 
+    println!("begin prove_execution");
      let execution =
                 trace.prove_execution::<CurrentAleo, _>(locator.0, rng).map_err(|e| e.to_string())?;
      let execution_id = execution.to_execution_id().map_err(|e| e.to_string())?;
