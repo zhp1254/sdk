@@ -349,8 +349,6 @@ fn create_transfer(data: TransferInfo) -> Result<Transaction, String>{
                 ProgramNative::from_str(program_string).map_err(|_| "The program ID provided was invalid".to_string())?;
     println!("begin ProgramNative credits: {}, id: {}", program_string, program.id().to_string());
 
-
-    let locator = ("credits.aleo", "transfer_public");
     let amount = data.amount;
     let inputs = [data.receiver, format!("{amount}_u64")];
     let rng = &mut StdRng::from_entropy();
@@ -372,7 +370,7 @@ fn create_transfer(data: TransferInfo) -> Result<Transaction, String>{
     }
 
     println!("begin insert_proving_key transfer");
-    let transfer_identifier = IdentifierNative::from_str(locator.1).map_err(|e| e.to_string())?;
+    let transfer_identifier = IdentifierNative::from_str("transfer_public").map_err(|e| e.to_string())?;
     if !stack.contains_proving_key(&transfer_identifier) {
             stack
                 .insert_proving_key(&transfer_identifier, ProvingKeyNative::from(proving_key))
@@ -390,7 +388,7 @@ fn create_transfer(data: TransferInfo) -> Result<Transaction, String>{
             // program.id
             program.id(),
             // func name
-            locator.1,
+            transfer_identifier,
             // input
             inputs.iter(),
             rng,
