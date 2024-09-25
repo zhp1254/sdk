@@ -197,6 +197,10 @@ use types::native::RecordPlaintextNative;
 use rand::{rngs::StdRng};
 use rand::SeedableRng;
 
+use crate::native::IdentifierNative;
+use crate::native::ProvingKeyNative;
+use crate::native::VerifyingKeyNative;
+
 use crate::types::native::{
     CurrentAleo,
     ProcessNative,
@@ -218,6 +222,10 @@ struct TransferInfo {
     amount: u64,
     fee: u64,
     state_root: String,
+    transfer_proving_key: String,
+    transfer_verifying_key: String,
+    fee_proving_key: String,
+    fee_verifying_key: String,
 }
 
 /// A trait providing convenient methods for accessing the amount of Aleo present in a record
@@ -335,13 +343,42 @@ fn create_transfer(data: TransferInfo) -> Result<Transaction, String>{
          }
      };
 
+     let fee_verifying_key = VerifyingKey::from_string(&data.fee_verifying_key).map_err(|e| e.to_string())?;
+      let fee_proving_key = ProvingKey::from_string(&data.fee_proving_key).map_err(|e| e.to_string())?;
+
+      let verifying_key = VerifyingKey::from_string(&data.transfer_verifying_key).map_err(|e| e.to_string())?;
+      let proving_key = ProvingKey::from_string(&data.transfer_proving_key).map_err(|e| e.to_string())?;
+
     let locator = ("credits.aleo", "transfer_public");
     let amount = data.amount;
     let inputs = [data.receiver, format!("{amount}_u64")];
     let rng = &mut StdRng::from_entropy();
      // Initialize the process.
-    let process = ProcessNative::load().unwrap();
-    // Authorize the fee.
+    let mut process_native = ProcessNative::load().unwrap();
+    let process = &mut process_native;
+    let stack = process.get_stack(locator.0).map_err(|e| e.to_string())?;
+
+    let fee_identifier = IdentifierNative::from_str("fee_public").map_err(|e| e.to_string())?;
+    if !stack.contains_proving_key(&fee_identifier) {
+        stack
+            .insert_proving_key(&fee_identifier, ProvingKeyNative::from(fee_proving_key))
+            .map_err(|e| e.to_string())?;
+        stack
+            .insert_verifying_key(&fee_identifier, VerifyingKeyNative::from(fee_verifying_key))
+            .map_err(|e| e.to_string())?;
+    }
+
+    let transfer_identifier = IdentifierNative::from_str(locator.1).map_err(|e| e.to_string())?;
+    if !stack.contains_proving_key(&transfer_identifier) {
+            stack
+                .insert_proving_key(&transfer_identifier, ProvingKeyNative::from(proving_key))
+                .map_err(|e| e.to_string())?;
+            stack
+                .insert_verifying_key(&transfer_identifier, VerifyingKeyNative::from(verifying_key))
+                .map_err(|e| e.to_string())?;
+    }
+
+    // Authorize .
     let authorization = process
         .authorize::<CurrentAleo, _>(
             &private_key,
