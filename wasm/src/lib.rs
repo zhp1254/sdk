@@ -336,12 +336,7 @@ pub extern "C" fn transfer(key: *const c_char) -> *const c_char {
 }
 
 fn create_transfer(data: TransferInfo) -> Result<Transaction, String>{
-     let private_key = match PrivateKey::from_string(&data.private_key) {
-         Ok(v) => v,
-         Err(e) => {
-             panic!("parse private key err: {:?}", e);
-         }
-     };
+     let private_key = PrivateKey::from_string(&data.private_key).map_err(|e| e.to_string())?;
 
      let fee_verifying_key = VerifyingKey::from_string(&data.fee_verifying_key).map_err(|e| e.to_string())?;
       let fee_proving_key = ProvingKey::from_string(&data.fee_proving_key).map_err(|e| e.to_string())?;
@@ -359,6 +354,8 @@ fn create_transfer(data: TransferInfo) -> Result<Transaction, String>{
     let stack = process.get_stack(locator.0).map_err(|e| e.to_string())?;
 
     let fee_identifier = IdentifierNative::from_str("fee_public").map_err(|e| e.to_string())?;
+
+    println!("begin insert_proving_key fee");
     if !stack.contains_proving_key(&fee_identifier) {
         stack
             .insert_proving_key(&fee_identifier, ProvingKeyNative::from(fee_proving_key))
@@ -368,6 +365,7 @@ fn create_transfer(data: TransferInfo) -> Result<Transaction, String>{
             .map_err(|e| e.to_string())?;
     }
 
+    println!("begin insert_proving_key transfer");
     let transfer_identifier = IdentifierNative::from_str(locator.1).map_err(|e| e.to_string())?;
     if !stack.contains_proving_key(&transfer_identifier) {
             stack
@@ -378,6 +376,7 @@ fn create_transfer(data: TransferInfo) -> Result<Transaction, String>{
                 .map_err(|e| e.to_string())?;
     }
 
+    println!("begin authorize transfer");
     // Authorize .
     let authorization = process
         .authorize::<CurrentAleo, _>(
@@ -402,6 +401,7 @@ fn create_transfer(data: TransferInfo) -> Result<Transaction, String>{
      let execution_id = execution.to_execution_id().map_err(|e| e.to_string())?;
 
      //attach fee
+     println!("begin authorize fee");
      let fee_authorization = process.authorize_fee_public::<CurrentAleo, _>(
          &private_key,
          // base fee
