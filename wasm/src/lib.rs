@@ -344,6 +344,12 @@ fn create_transfer(data: TransferInfo) -> Result<Transaction, String>{
       let verifying_key = VerifyingKey::from_string(&data.transfer_verifying_key).map_err(|e| e.to_string())?;
       let proving_key = ProvingKey::from_string(&data.transfer_proving_key).map_err(|e| e.to_string())?;
 
+    let program_string = ProgramNative::credits().unwrap().to_string();
+    let program =
+                ProgramNative::from_str(program_string).map_err(|_| "The program ID provided was invalid".to_string())?;
+    println!("begin ProgramNative credits: {}, id: {}", program_string, program.id().to_string());
+
+
     let locator = ("credits.aleo", "transfer_public");
     let amount = data.amount;
     let inputs = [data.receiver, format!("{amount}_u64")];
@@ -351,7 +357,7 @@ fn create_transfer(data: TransferInfo) -> Result<Transaction, String>{
      // Initialize the process.
     let mut process_native = ProcessNative::load().unwrap();
     let process = &mut process_native;
-    let stack = process.get_stack(locator.0).map_err(|e| e.to_string())?;
+    let stack = process.get_stack(program.id()).map_err(|e| e.to_string())?;
 
     let fee_identifier = IdentifierNative::from_str("fee_public").map_err(|e| e.to_string())?;
 
@@ -382,7 +388,7 @@ fn create_transfer(data: TransferInfo) -> Result<Transaction, String>{
         .authorize::<CurrentAleo, _>(
             &private_key,
             // program.id
-            locator.0,
+            program.id(),
             // func name
             locator.1,
             // input
@@ -400,7 +406,7 @@ fn create_transfer(data: TransferInfo) -> Result<Transaction, String>{
 
     println!("begin prove_execution");
      let execution =
-                trace.prove_execution::<CurrentAleo, _>(locator.0, rng).map_err(|e| e.to_string())?;
+                trace.prove_execution::<CurrentAleo, _>("credits.aleo/transfer", rng).map_err(|e| e.to_string())?;
      let execution_id = execution.to_execution_id().map_err(|e| e.to_string())?;
 
      //attach fee
