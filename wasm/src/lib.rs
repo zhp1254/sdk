@@ -16,7 +16,7 @@
 
 //!
 //! [![Crates.io](https://img.shields.io/crates/v/aleo-wasm.svg?color=neon)](https://crates.io/crates/aleo-wasm)
-//! [![Authors](https://img.shields.io/badge/authors-Aleo-orange.svg)](https://aleo.org)
+//! [![Authors](https://img.shields.io/badge/authors-Aleo-orange.svg)](https://provable.com)
 //! [![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](./LICENSE.md)
 //!
 //! [![github]](https://github.com/ProvableHQ/sdk)&ensp;[![crates-io]](https://crates.io/crates/aleo-wasm)&ensp;[![docs-rs]](https://docs.rs/aleo-wasm/latest/aleo-wasm/)
@@ -152,13 +152,6 @@
 //! example of how to use these modules to build a web app. Its source code can be found in the
 //!
 
-use std::ffi::CStr;
-use std::ffi::c_char;
-use std::ffi::CString;
-
-use serde_json;
-use serde::{Deserialize, Serialize};
-
 pub mod account;
 pub use account::*;
 
@@ -194,18 +187,6 @@ use wasm_bindgen::prelude::*;
 use std::str::FromStr;
 
 use types::native::RecordPlaintextNative;
-use rand::{rngs::StdRng};
-use rand::SeedableRng;
-
-use crate::native::IdentifierNative;
-use crate::native::ProvingKeyNative;
-use crate::native::VerifyingKeyNative;
-
-use crate::types::native::{
-    CurrentAleo,
-    ProcessNative,
-    TransactionNative
-};
 
 // Facilities for cross-platform logging in both web browsers and nodeJS
 #[wasm_bindgen]
@@ -213,19 +194,6 @@ extern "C" {
     // Log a &str the console in the browser or console.log in nodejs
     #[wasm_bindgen(js_namespace = console)]
     pub fn log(s: &str);
-}
-
-#[derive(Serialize, Deserialize)]
-struct TransferInfo {
-    private_key: String,
-    receiver: String,
-    amount: u64,
-    fee: u64,
-    state_root: String,
-    transfer_proving_key: String,
-    transfer_verifying_key: String,
-    fee_proving_key: String,
-    fee_verifying_key: String,
 }
 
 /// A trait providing convenient methods for accessing the amount of Aleo present in a record
@@ -267,162 +235,3 @@ pub async fn init_thread_pool(url: web_sys::Url, num_threads: usize) -> Result<(
 
     Ok(())
 }
-
-#[no_mangle]
-pub extern "C" fn new_private() -> *const c_char {
-       let key = PrivateKey::new();
-       let key_str = key.to_string();
-       let c_key = CString::new(key_str).unwrap();
-       c_key.into_raw()
-}
-
-#[no_mangle]
-pub extern "C" fn free_c_char(ptr: *mut c_char) {
-    unsafe { drop(CString::from_raw(ptr)) };
-}
-
-#[no_mangle]
-pub extern "C" fn private_to_address(key: *const c_char) -> *const c_char {
-       let key_tmp = unsafe { CStr::from_ptr(key) };
-       let key_str = match key_tmp.to_str() {
-              Ok(v) => v,
-              Err(e) => {
-                  panic!("key to_str err: {:?}", e);
-              }
-          };
-
-       let key_n = match PrivateKey::from_string(key_str) {
-             Ok(v) => v,
-             Err(e) => {
-                 panic!("parse key err: {:?}", e);
-             }
-         };
-       let addr = key_n.to_address().to_string();
-       let ret = CString::new(addr).unwrap();
-       ret.into_raw()
-}
-
-#[no_mangle]
-pub extern "C" fn transfer(key: *const c_char) -> *const c_char {
-    let key_json = unsafe {
-            assert!(!key.is_null());
-            CStr::from_ptr(key)
-        };
-
-    let json_str = match key_json.to_str() {
-        Ok(v) => v,
-        Err(e) => {
-            panic!("parse json err: {:?}", e);
-        }
-    };
-
-    let data: TransferInfo = match serde_json::from_str(json_str) {
-        Ok(v) => v,
-        Err(e) => {
-            panic!("json to struct err: {:?}", e)
-        }
-    };
-
-    let transaction = match create_transfer(data) {
-        Ok(v) => v,
-        Err(e) => {
-            panic!("create transfer err: {:?}", e)
-        }
-    };
-
-    let tx = transaction.to_string();
-     let ret = CString::new(tx).unwrap();
-     ret.into_raw()
-}
-
-fn create_transfer(data: TransferInfo) -> Result<Transaction, String>{
-     let private_key = PrivateKey::from_string(&data.private_key).map_err(|e| e.to_string())?;
-
-     let fee_verifying_key = VerifyingKey::from_string(&data.fee_verifying_key).map_err(|e| e.to_string())?;
-      let fee_proving_key = ProvingKey::from_string(&data.fee_proving_key).map_err(|e| e.to_string())?;
-
-      let verifying_key = VerifyingKey::from_string(&data.transfer_verifying_key).map_err(|e| e.to_string())?;
-      let proving_key = ProvingKey::from_string(&data.transfer_proving_key).map_err(|e| e.to_string())?;
-
-    let locator = ("credits.aleo", "transfer_public");
-    let amount = data.amount;
-    let inputs = [data.receiver, format!("{amount}_u64")];
-    let rng = &mut StdRng::from_entropy();
-     // Initialize the process.
-    let mut process_native = ProcessNative::load().unwrap();
-    let process = &mut process_native;
-    let stack = process.get_stack(locator.0).map_err(|e| e.to_string())?;
-
-    let fee_identifier = IdentifierNative::from_str("fee_public").map_err(|e| e.to_string())?;
-
-    println!("begin insert_proving_key fee");
-    if !stack.contains_proving_key(&fee_identifier) {
-        stack
-            .insert_proving_key(&fee_identifier, ProvingKeyNative::from(fee_proving_key))
-            .map_err(|e| e.to_string())?;
-        stack
-            .insert_verifying_key(&fee_identifier, VerifyingKeyNative::from(fee_verifying_key))
-            .map_err(|e| e.to_string())?;
-    }
-
-    println!("begin insert_proving_key transfer");
-    let transfer_identifier = IdentifierNative::from_str(locator.1).map_err(|e| e.to_string())?;
-    if !stack.contains_proving_key(&transfer_identifier) {
-            stack
-                .insert_proving_key(&transfer_identifier, ProvingKeyNative::from(proving_key))
-                .map_err(|e| e.to_string())?;
-            stack
-                .insert_verifying_key(&transfer_identifier, VerifyingKeyNative::from(verifying_key))
-                .map_err(|e| e.to_string())?;
-    }
-
-    println!("begin authorize transfer");
-    // Authorize .
-    let authorization = process
-        .authorize::<CurrentAleo, _>(
-            &private_key,
-            // program.id
-            locator.0,
-            // func name
-            locator.1,
-            // input
-            inputs.iter(),
-            rng,
-        )
-        .unwrap();
-    // Construct the fee trace.
-    println!("begin execute transfer");
-    let (_, mut trace) = process.execute::<CurrentAleo, _>(authorization, rng).unwrap();
-    // Prepare the assignments.
-    println!("begin prepare offline_query");
-    let offline_query = OfflineQuery::new(&data.state_root).unwrap();
-    let _ = trace.prepare(offline_query.clone());
-
-    println!("begin prove_execution");
-     let execution =
-                trace.prove_execution::<CurrentAleo, _>(locator.0, rng).map_err(|e| e.to_string())?;
-     let execution_id = execution.to_execution_id().map_err(|e| e.to_string())?;
-
-     //attach fee
-     println!("begin authorize fee");
-     let fee_authorization = process.authorize_fee_public::<CurrentAleo, _>(
-         &private_key,
-         // base fee
-         data.fee,
-         //priority fee
-         0u64,
-         execution_id,
-         rng,
-     ).map_err(|e| e.to_string())?;
-
-     let (_, mut fee_trace) = process
-                 .execute::<CurrentAleo, _>(fee_authorization, rng)
-                 .map_err(|err| err.to_string())?;
-     let _ = fee_trace.prepare(offline_query.clone());
-     let fee = fee_trace.prove_fee::<CurrentAleo, _>(&mut StdRng::from_entropy()).map_err(|e|e.to_string())?;
-
-     let transaction = TransactionNative::from_execution(execution, Some(fee)).map_err(|err| err.to_string())?;
-     Ok(Transaction::from(transaction))
-}
-
-

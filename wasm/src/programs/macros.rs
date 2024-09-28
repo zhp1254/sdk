@@ -18,6 +18,7 @@
 macro_rules! process_inputs {
     ($inputs:expr) => {{
         let mut inputs_native = Vec::<String>::new();
+        log("parsing inputs");
         for input in $inputs.to_vec().iter() {
             if let Some(input) = input.as_string() {
                 inputs_native.push(input);
@@ -41,14 +42,17 @@ macro_rules! execute_program {
             );
         }
 
+        log("Loading program");
         let program =
             ProgramNative::from_str($program_string).map_err(|_| "The program ID provided was invalid".to_string())?;
+        log("Loading function");
         let function_name = IdentifierNative::from_str($function_id_string)
             .map_err(|_| "The function name provided was invalid".to_string())?;
 
         let program_id = program.id().to_string();
 
         if program_id != "credits.aleo" {
+            log("Adding program to the process");
             if let Ok(stored_program) = $process.get_program(program.id()) {
                 if stored_program != &program {
                     return Err("The program provided does not match the program stored in the cache, please clear the cache before proceeding".to_string());
@@ -60,7 +64,9 @@ macro_rules! execute_program {
 
         if let Some(proving_key) = $proving_key {
             if Self::contains_key($process, program.id(), &function_name) {
+                log(&format!("Proving & verifying keys were specified for {program_id} - {function_name:?} but a key already exists in the cache. Using cached keys"));
             } else {
+                log(&format!("Inserting externally provided proving and verifying keys for {program_id} - {function_name:?}"));
                 $process
                     .insert_proving_key(program.id(), &function_name, ProvingKeyNative::from(proving_key))
                     .map_err(|e| e.to_string())?;
@@ -70,6 +76,7 @@ macro_rules! execute_program {
             }
         };
 
+        log("Creating authorization");
         let authorization = $process
             .authorize::<CurrentAleo, _>(
                 $private_key,
@@ -80,6 +87,7 @@ macro_rules! execute_program {
             )
             .map_err(|err| err.to_string())?;
 
+        log("Executing program");
         let result = $process
             .execute::<CurrentAleo, _>(authorization, $rng)
             .map_err(|err| err.to_string())?;
@@ -108,7 +116,9 @@ macro_rules! execute_fee {
                 IdentifierNative::from_str("fee_public").unwrap()
             };
             if Self::contains_key($process, &credits, &fee) {
+                log("Fee proving & verifying keys were specified but a key already exists in the cache. Using cached keys");
             } else {
+                log("Inserting externally provided fee proving and verifying keys");
                 $process
                     .insert_proving_key(&credits, &fee, ProvingKeyNative::from(fee_proving_key)).map_err(|e| e.to_string())?;
                 if let Some(fee_verifying_key) = $fee_verifying_key {
@@ -119,6 +129,7 @@ macro_rules! execute_fee {
             }
         };
 
+        log("Authorizing Fee");
         let fee_authorization = match $fee_record {
             Some(fee_record) => {
                 let fee_record_native = RecordPlaintextNative::from_str(&fee_record.to_string()).unwrap();
@@ -136,18 +147,20 @@ macro_rules! execute_fee {
             }
         };
 
+        log("Executing fee");
         let (_, mut trace) = $process
             .execute::<CurrentAleo, _>(fee_authorization, $rng)
             .map_err(|err| err.to_string())?;
 
         if let Some(offline_query) = $offline_query {
-            trace.prepare(offline_query).map_err(|err| err.to_string())?;
+            trace.prepare_async(offline_query).await.map_err(|err| err.to_string())?;
         } else {
             let query = QueryNative::from($submission_url);
-            trace.prepare(query).map_err(|err| err.to_string())?;
+            trace.prepare_async(query).await.map_err(|err| err.to_string())?;
         };
         let fee = trace.prove_fee::<CurrentAleo, _>(&mut StdRng::from_entropy()).map_err(|e|e.to_string())?;
 
+        log("Verifying fee execution");
         $process.verify_fee(&fee, $execution_id).map_err(|e| e.to_string())?;
 
         fee
