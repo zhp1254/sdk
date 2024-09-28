@@ -204,6 +204,7 @@ use crate::native::VerifyingKeyNative;
 use crate::types::native::{
     CurrentAleo,
     ProcessNative,
+    ProgramNative,
     TransactionNative
 };
 
@@ -346,7 +347,7 @@ fn create_transfer(data: TransferInfo) -> Result<Transaction, String>{
 
     let program_string = ProgramNative::credits().unwrap().to_string();
     let program =
-                ProgramNative::from_str(program_string).map_err(|_| "The program ID provided was invalid".to_string())?;
+                ProgramNative::from_str(&program_string).map_err(|_| "The program ID provided was invalid".to_string())?;
     println!("begin ProgramNative credits: {}, id: {}", program_string, program.id().to_string());
 
     let amount = data.amount;
