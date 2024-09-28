@@ -145,7 +145,7 @@ features = [
 ]
 
 [features]
-default = [ "serial", "mainnet" ]
+default = [ "browser", "mainnet" ]
 serial = [ "snarkvm-console/serial", "snarkvm-synthesizer/serial", "snarkvm-ledger-query/serial", "snarkvm-ledger-block/serial", "snarkvm-ledger-store/serial" ]
 browser = [ ]
 testnet = [ ]
