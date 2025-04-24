@@ -51,6 +51,7 @@
     "@provablehq/wasm": "^0.6.0",
     "comlink": "^4.4.1",
     "mime": "^3.0.0",
+    "assert": "^2.1.0",
     "sync-request": "^6.1.0"
   },
   "devDependencies": {

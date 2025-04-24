@@ -27,7 +27,6 @@
     "pretty": "prettier . --write"
   },
   "devDependencies": {
-    "prettier": "3.0.3",
-    "wasm-pack": "^0.12.1"
+    "prettier": "3.0.3"
   }
 }

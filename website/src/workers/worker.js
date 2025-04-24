@@ -247,7 +247,7 @@ self.addEventListener("message", (ev) => {
         } = ev.data;
 
         console.log(
-            `Web worker: Creating transfer of type ${transfer_type}...`,
+            `Web worker: Creating transfer of type ${transfer_type}, fee:${fee}...`,
         );
         let startTime = performance.now();
 
