@@ -11,8 +11,8 @@ async function buildTransferPublicTxOffline(recipientAddress: Address, amount: n
     // Create a temporary account for the execution of the program
     //const account = new Account();
     
-    //APrivateKey1zkpCaSYGYZzxVd5ApeNeX5yPFDPiumZfw6T9bMww2czKurY
-    const pKey = PrivateKey.from_string("APrivateKey1zkpCaSYGYZzxVd5ApeNeX5yPFDPiumZfw6T9bMww2czKurY");
+    //
+    const pKey = PrivateKey.from_string("");
 
     var account = new Account({
         privateKey: pKey.to_string()
