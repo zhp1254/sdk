@@ -672,7 +672,7 @@ class ProgramManager {
         }
 
         // Build an execution transaction and submit it to the network
-        return await WasmProgramManager.buildTransferTransaction(executionPrivateKey, amount, recipient, transferType, amountRecord, fee, feeRecord, this.host, transferProvingKey, transferVerifyingKey, feeProvingKey, feeVerifyingKey, offlineQuery);
+        return await WasmProgramManager.buildTransferTransaction(executionPrivateKey, BigInt(amount), recipient, transferType, amountRecord, BigInt(fee), feeRecord, this.host, transferProvingKey, transferVerifyingKey, feeProvingKey, feeVerifyingKey, offlineQuery);
     }
 
     /**

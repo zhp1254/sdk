@@ -99,6 +99,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "console_error_panic_hook",
+ "dirs",
  "futures",
  "getrandom",
  "gloo-timers",

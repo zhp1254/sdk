@@ -3,8 +3,8 @@ import replace from "@rollup/plugin-replace";
 import $package from "./package.json" assert { type: "json" };
 
 const networks = [
-    "testnet",
     "mainnet",
+    "testnet",
 ];
 
 export default networks.map((network) => {

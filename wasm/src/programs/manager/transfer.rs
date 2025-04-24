@@ -39,6 +39,8 @@ use rand::{rngs::StdRng, SeedableRng};
 use std::{ops::Add, str::FromStr};
 use wasm_bindgen::JsValue;
 
+use dirs::home_dir;
+
 #[wasm_bindgen]
 impl ProgramManager {
     /// Send credits from one Aleo account to another
@@ -60,11 +62,11 @@ impl ProgramManager {
     #[allow(clippy::too_many_arguments)]
     pub async fn transfer(
         private_key: &PrivateKey,
-        amount_credits: f64,
+        amount_credits: u64,
         recipient: &str,
         transfer_type: &str,
         amount_record: Option<RecordPlaintext>,
-        fee_credits: f64,
+        fee_credits: u64,
         fee_record: Option<RecordPlaintext>,
         url: Option<String>,
         transfer_proving_key: Option<ProvingKey>,
@@ -74,14 +76,11 @@ impl ProgramManager {
         offline_query: Option<OfflineQuery>,
     ) -> Result<Transaction, String> {
         log("Executing transfer program");
-        let fee_microcredits = match &fee_record {
-            Some(fee_record) => Self::validate_amount(fee_credits, fee_record, true)?,
-            None => (fee_credits * 1_000_000.0) as u64,
-        };
-        let amount_microcredits = match &amount_record {
-            Some(amount_record) => Self::validate_amount(amount_credits, amount_record, true)?,
-            None => (amount_credits * 1_000_000.0) as u64,
-        };
+
+        log("home_dir:");
+        log(env!("CARGO_MANIFEST_DIR"));
+        let fee_microcredits = fee_credits;
+        let amount_microcredits = amount_credits;
 
         log("Setup the program and inputs");
         let node_url = url.as_deref().unwrap_or(DEFAULT_URL);
