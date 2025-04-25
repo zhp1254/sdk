@@ -11,6 +11,7 @@ async function downloadAndSaveKey(keyData, keysDirPath) {
     const filePath = path.join(dirPath, `${fileName}.prover`);
 
     try {
+        //console.log("filePath: ", filePath)
         await fsPromises.access(filePath);
         return filePath;
     } catch {

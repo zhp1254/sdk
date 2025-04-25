@@ -11,8 +11,8 @@ async function buildTransferPublicTxOffline(recipientAddress: Address, amount: n
     // Create a temporary account for the execution of the program
     //const account = new Account();
     
-    //APrivateKey1zkpCaSYGYZzxVd5ApeNeX5yPFDPiumZfw6T9bMww2czKurY
-    const pKey = PrivateKey.from_string("APrivateKey1zkpCaSYGYZzxVd5ApeNeX5yPFDPiumZfw6T9bMww2czKurY");
+    //
+    const pKey = PrivateKey.from_string("");
 
     var account = new Account({
         privateKey: pKey.to_string()
@@ -30,6 +30,15 @@ async function buildTransferPublicTxOffline(recipientAddress: Address, amount: n
     const transferPublicProvingKey = ProvingKey.fromBytes(transferPublicAsSignerKeyBytes);
 
 
+    console.log("========================================")
+    console.log(feePublicProvingKey.toString())
+    console.log("========================================")
+    console.log(transferPublicProvingKey.toString())
+    console.log("========================================")
+    console.log(VerifyingKey.feePublicVerifier().toString())
+    console.log("========================================")
+    console.log(VerifyingKey.transferPublicVerifier().toString())
+    console.log("========================================")
 
     // Create an offline key provider
     console.log("Creating offline key provider");
@@ -70,13 +79,13 @@ const bondingKeyPaths = await preDownloadBondingKeys();
 // ------------------OFFLINE COMPONENT---------------------
 //           (Do this part on an offline machine)
 // Get the latest state root from an online machine and enter it into an offline machine
-const latestStateRoot = "sr1hm2yjpzegf0me0t3wstmg5w0hrng50avq86ydq5c22ghzqcntyyswhxjcl";
+const latestStateRoot = "sr1agmpctgqw3zmruueauess05ejdw8z23gshpww94hj6gtsgh02uxs93fa5t";
 
 // Build a transfer_public transaction
 const stakerAddress = new Account().address();
 const validatorAddress = new Account().address();
 const withdrawalAddress = new Account().address();
-const transferTx = await buildTransferPublicTxOffline(Address.from_string( "aleo17mc3zesnz8a5kukkwpz4cv5lmfw3j5y4xzwucvp33wuskmfzxsqqd82kvv" ), 100000, latestStateRoot, transferKeyPaths);
+const transferTx = await buildTransferPublicTxOffline(Address.from_string( "aleo1v4adjlsj3rjqqxdmup60lqxljgsl2nvckvfcewlgsq3cuu4ap5rq7t6xfh" ), 100000, latestStateRoot, transferKeyPaths);
 console.log("Transfer transaction built offline!");
 console.log(`\n---------------transfer_public transaction---------------\n${transferTx}`);
 console.log(`---------------------------------------------------------`);
