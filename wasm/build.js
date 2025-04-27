@@ -193,7 +193,6 @@ async function build(network) {
 
 
 const networks = [
-    "testnet",
     "mainnet",
 ];
 

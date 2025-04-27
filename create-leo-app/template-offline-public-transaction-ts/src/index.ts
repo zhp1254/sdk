@@ -1,4 +1,4 @@
-import {Account, Address, CREDITS_PROGRAM_KEYS, initThreadPool, ProgramManager, OfflineQuery, OfflineKeyProvider, OfflineSearchParams, ProvingKey, Transaction} from "@provablehq/sdk";
+import {Account, VerifyingKey, Address, CREDITS_PROGRAM_KEYS, initThreadPool, ProgramManager, OfflineQuery, OfflineKeyProvider, OfflineSearchParams, ProvingKey, Transaction} from "@provablehq/sdk";
 import { getLocalKey, preDownloadBondingKeys, preDownloadTransferKeys } from "./helpers";
 
 await initThreadPool();
@@ -20,6 +20,17 @@ async function buildTransferPublicTxOffline(recipientAddress: Address, amount: n
         await getLocalKey(<string>keyPaths[CREDITS_PROGRAM_KEYS.transfer_public.locator])
     );
     
+
+    console.log("========================================")
+    console.log(feePublicProvingKey.toString())
+    console.log("========================================")
+    console.log(transferPublicProvingKey.toString())
+    console.log("========================================")
+    console.log(VerifyingKey.feePublicVerifier().toString())
+    console.log("========================================")
+    console.log(VerifyingKey.transferPublicVerifier().toString())
+    console.log("========================================")
+
     // Create an offline key provider
     console.log("Creating offline key provider");
     const offlineKeyProvider = new OfflineKeyProvider();
@@ -171,17 +182,6 @@ const transferTx = await buildTransferPublicTxOffline(stakerAddress, 10000, late
 console.log("Transfer transaction built offline!");
 console.log(`\n---------------transfer_public transaction---------------\n${transferTx}`);
 console.log(`---------------------------------------------------------`);
-
-// Build bonding & unbonding transactions
-const bondTransactions = await buildBondingTxOffline(validatorAddress, withdrawalAddress, 100, latestStateRoot, bondingKeyPaths);
-console.log("Bonding transactions built offline!");
-console.log(`\n-----------------bond_public transaction-----------------\n${bondTransactions[0]}`);
-console.log(`---------------------------------------------------------`);
-console.log(`\n----------------unbond_public transaction:---------------\n${bondTransactions[1]}`);
-console.log(`---------------------------------------------------------`);
-console.log(`\n-----------------claim_unbond_public transaction:---------------\n${bondTransactions[2]}`);
-console.log(`---------------------------------------------------------`);
-//---------------------------------------------------------
 
 // -------------------ONLINE COMPONENT---------------------
 //     (Do this part on an internet connected machine)

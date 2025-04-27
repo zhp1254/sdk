@@ -196,7 +196,23 @@ use wasm_bindgen::prelude::*;
 
 use std::str::FromStr;
 
+use rand::{rngs::StdRng};
+use rand::SeedableRng;
+
+use snarkvm_synthesizer_program::StackKeys;
+use snarkvm_algorithms::snark::varuna::VarunaVersion;
 use types::native::RecordPlaintextNative;
+use crate::native::IdentifierNative;
+use crate::native::ProvingKeyNative;
+use crate::native::VerifyingKeyNative;
+
+use crate::types::native::{
+    CurrentAleo,
+    ProcessNative,
+    ProgramNative,
+    TransactionNative
+};
+
 
 // Facilities for cross-platform logging in both web browsers and nodeJS
 #[wasm_bindgen]
@@ -204,6 +220,20 @@ extern "C" {
     // Log a &str the console in the browser or console.log in nodejs
     #[wasm_bindgen(js_namespace = console)]
     pub fn log(s: &str);
+}
+
+
+#[derive(Serialize, Deserialize)]
+struct TransferInfo {
+    private_key: String,
+    receiver: String,
+    amount: u64,
+    fee: u64,
+    state_root: String,
+    transfer_proving_key: String,
+    transfer_verifying_key: String,
+    fee_proving_key: String,
+    fee_verifying_key: String,
 }
 
 #[macro_export]
@@ -266,4 +296,172 @@ pub async fn init_thread_pool(url: web_sys::Url, num_threads: usize) -> Result<(
     thread_pool::ThreadPool::builder().url(url).num_threads(num_threads).build_global().await?;
 
     Ok(())
+}
+
+use std::ffi::CStr;
+use std::ffi::c_char;
+use std::ffi::CString;
+
+use serde_json;
+use serde::{Deserialize, Serialize};
+
+#[no_mangle]
+pub extern "C" fn new_private() -> *const c_char {
+       let key = PrivateKey::new();
+       let key_str = key.to_string();
+       let c_key = CString::new(key_str).unwrap();
+       c_key.into_raw()
+}
+
+#[no_mangle]
+pub extern "C" fn free_c_char(ptr: *mut c_char) {
+    unsafe { drop(CString::from_raw(ptr)) };
+}
+
+#[no_mangle]
+pub extern "C" fn private_to_address(key: *const c_char) -> *const c_char {
+       let key_tmp = unsafe { CStr::from_ptr(key) };
+       let key_str = match key_tmp.to_str() {
+              Ok(v) => v,
+              Err(e) => {
+                  panic!("key to_str err: {:?}", e);
+              }
+          };
+
+       let key_n = match PrivateKey::from_string(key_str) {
+             Ok(v) => v,
+             Err(e) => {
+                 panic!("parse key err: {:?}", e);
+             }
+         };
+       let addr = key_n.to_address().to_string();
+       let ret = CString::new(addr).unwrap();
+       ret.into_raw()
+}
+
+#[no_mangle]
+pub extern "C" fn transfer(key: *const c_char) -> *const c_char {
+    let key_json = unsafe {
+            assert!(!key.is_null());
+            CStr::from_ptr(key)
+        };
+
+    let json_str = match key_json.to_str() {
+        Ok(v) => v,
+        Err(e) => {
+            panic!("parse json err: {:?}", e);
+        }
+    };
+
+    let data: TransferInfo = match serde_json::from_str(json_str) {
+        Ok(v) => v,
+        Err(e) => {
+            panic!("json to struct err: {:?}", e)
+        }
+    };
+
+    let transaction = match create_transfer(data) {
+        Ok(v) => v,
+        Err(e) => {
+            panic!("create transfer err: {:?}", e)
+        }
+    };
+
+    let tx = transaction.to_string();
+     let ret = CString::new(tx).unwrap();
+     ret.into_raw()
+}
+
+fn create_transfer(data: TransferInfo) -> Result<Transaction, String>{
+     let private_key = PrivateKey::from_string(&data.private_key).map_err(|e| e.to_string())?;
+
+     let fee_verifying_key = VerifyingKey::from_string(&data.fee_verifying_key).map_err(|e| e.to_string())?;
+      let fee_proving_key = ProvingKey::from_string(&data.fee_proving_key).map_err(|e| e.to_string())?;
+
+      let verifying_key = VerifyingKey::from_string(&data.transfer_verifying_key).map_err(|e| e.to_string())?;
+      let proving_key = ProvingKey::from_string(&data.transfer_proving_key).map_err(|e| e.to_string())?;
+
+    let program_string = ProgramNative::credits().unwrap().to_string();
+    let program =
+                ProgramNative::from_str(&program_string).map_err(|_| "The program ID provided was invalid".to_string())?;
+    println!("begin ProgramNative credits: {}, id: {}", program_string, program.id().to_string());
+
+    let amount = data.amount;
+    let inputs = [data.receiver, format!("{amount}_u64")];
+    let rng = &mut StdRng::from_entropy();
+     // Initialize the process.
+    let mut process_native = ProcessNative::load().unwrap();
+    let process = &mut process_native;
+    let stack = process.get_stack(program.id()).map_err(|e| e.to_string())?;
+
+    let fee_identifier = IdentifierNative::from_str("fee_public").map_err(|e| e.to_string())?;
+
+    if !stack.contains_proving_key(&fee_identifier) {
+    println!("begin insert_proving_key fee");
+        stack
+            .insert_proving_key(&fee_identifier, ProvingKeyNative::from(fee_proving_key))
+            .map_err(|e| e.to_string())?;
+        stack
+            .insert_verifying_key(&fee_identifier, VerifyingKeyNative::from(fee_verifying_key))
+            .map_err(|e| e.to_string())?;
+    }
+
+    let transfer_identifier = IdentifierNative::from_str("transfer_public").map_err(|e| e.to_string())?;
+    if !stack.contains_proving_key(&transfer_identifier) {
+    println!("begin insert_proving_key transfer");
+            stack
+                .insert_proving_key(&transfer_identifier, ProvingKeyNative::from(proving_key))
+                .map_err(|e| e.to_string())?;
+            stack
+                .insert_verifying_key(&transfer_identifier, VerifyingKeyNative::from(verifying_key))
+                .map_err(|e| e.to_string())?;
+    }
+
+    println!("begin authorize transfer");
+    // Authorize .
+    let authorization = process
+        .authorize::<CurrentAleo, _>(
+            &private_key,
+            // program.id
+            program.id(),
+            // func name
+            transfer_identifier,
+            // input
+            inputs.iter(),
+            rng,
+        )
+        .unwrap();
+    // Construct the fee trace.
+    println!("begin execute transfer");
+    let (_, mut trace) = process.execute::<CurrentAleo, _>(authorization, rng).unwrap();
+    // Prepare the assignments.
+    println!("begin prepare offline_query");
+    let offline_query = OfflineQuery::new(0,&data.state_root).unwrap();
+    let _ = trace.prepare(offline_query.clone());
+
+    println!("begin prove_execution");
+     let execution =
+                trace.prove_execution::<CurrentAleo,  _>("credits.aleo/transfer", VarunaVersion::V2, rng).map_err(|e| e.to_string())?;
+     let execution_id = execution.to_execution_id().map_err(|e| e.to_string())?;
+
+     //attach fee
+     println!("begin authorize fee");
+     let fee_authorization = process.authorize_fee_public::<CurrentAleo, _>(
+         &private_key,
+         // base fee
+         data.fee,
+         //priority fee
+         0u64,
+         execution_id,
+         rng,
+     ).map_err(|e| e.to_string())?;
+
+     let (_, mut fee_trace) = process
+                 .execute::<CurrentAleo, _>(fee_authorization, rng)
+                 .map_err(|err| err.to_string())?;
+     let _ = fee_trace.prepare(offline_query.clone());
+     let fee = fee_trace.prove_fee::<CurrentAleo, _>(VarunaVersion::V2,&mut StdRng::from_entropy()).map_err(|e|e.to_string())?;
+
+     let transaction = TransactionNative::from_execution(execution, Some(fee)).map_err(|err| err.to_string())?;
+     Ok(Transaction::from(transaction))
 }

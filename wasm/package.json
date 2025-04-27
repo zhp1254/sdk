@@ -7,12 +7,12 @@
     "The Provable Team"
   ],
   "license": "GPL-3.0",
-  "main": "./dist/testnet/index.js",
-  "browser": "./dist/testnet/index.js",
-  "types": "./dist/testnet/index.d.ts",
+  "main": "./dist/mainnet/index.js",
+  "browser": "./dist/mainnet/index.js",
+  "types": "./dist/mainnet/index.d.ts",
   "exports": {
-    ".": "./dist/testnet/index.js",
-    "./worker.js": "./dist/testnet/worker.js",
+    ".": "./dist/mainnet/index.js",
+    "./worker.js": "./dist/mainnet/worker.js",
     "./testnet.js": "./dist/testnet/index.js",
     "./testnet/worker.js": "./dist/testnet/worker.js",
     "./mainnet.js": "./dist/mainnet/index.js",
